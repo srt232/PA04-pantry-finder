@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pantry Finder – Montgomery & Berks County</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F7F3; --surface:#FFFFFF; --ink:#18201B; --muted:#56635A;
+    --pine:#1F4D3A; --pine-ink:#FFFFFF; --sage:#DDE7DF; --line:#C9D4CB;
+    --tag:#F2C14E; --tag-ink:#3A2C05; --err:#A3261B;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#121714; --surface:#1B221E; --ink:#E8EEE9; --muted:#9DAAA1;
+      --pine:#5FB38B; --pine-ink:#0D1A13; --sage:#24312A; --line:#33423A;
+      --tag:#E8B83F; --tag-ink:#2A1F02; --err:#F08A7E;
+      color-scheme:dark;
+    }
+  }
+  html{scroll-padding-top:env(safe-area-inset-top,0px)}
+  body{background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,sans-serif;line-height:1.55;
+       padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+  h1,h2,h3{font-family:"Bricolage Grotesque",system-ui,sans-serif;letter-spacing:-.01em}
+  .surface{background:var(--surface);border:1px solid var(--line)}
+  .muted{color:var(--muted)}
+  .btn{background:var(--pine);color:var(--pine-ink);font-weight:700;border-radius:.6rem;padding:.65rem 1.1rem}
+  .btn:hover{filter:brightness(1.08)}
+  .btn-ghost{border:1.5px solid var(--pine);color:var(--pine);font-weight:700;border-radius:.6rem;padding:.6rem 1rem}
+  .field{background:var(--surface);border:1.5px solid var(--line);border-radius:.6rem;padding:.6rem .8rem;color:var(--ink);width:100%}
+  .field:focus,.btn:focus-visible,.btn-ghost:focus-visible,.chip:focus-visible{outline:3px solid var(--tag);outline-offset:2px}
+  /* The one memorable thing: need items as shelf price tags */
+  .need{position:relative;display:inline-block;background:var(--tag);color:var(--tag-ink);font-weight:700;font-size:.85rem;
+        padding:.2rem .6rem .2rem 1.05rem;border-radius:.2rem .45rem .45rem .2rem;
+        clip-path:polygon(.55rem 0,100% 0,100% 100%,.55rem 100%,0 50%)}
+  .need::before{content:"";position:absolute;left:.5rem;top:50%;width:.3rem;height:.3rem;margin-top:-.15rem;border-radius:50%;background:var(--surface)}
+  .chip{border:1.5px solid var(--line);border-radius:999px;padding:.35rem .85rem;font-size:.9rem}
+  .chip[aria-pressed="true"]{background:var(--pine);border-color:var(--pine);color:var(--pine-ink)}
+  dialog::backdrop{background:rgba(0,0,0,.45)}
+  dialog{background:var(--surface);color:var(--ink);border-radius:1rem;max-width:32rem;width:calc(100% - 2rem)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+
+  <!-- Header / search -->
+  <header class="mb-8">
+    <p class="font-bold" style="color:var(--pine)">Montgomery & Berks County, PA</p>
+    <h1 class="text-4xl sm:text-5xl font-extrabold mt-1 mb-3">Find a food pantry.<br>Give what's needed.</h1>
+    <p class="muted max-w-xl">Pantry hours and the items each one is short on right now, kept current by the coordinators who run them.</p>
+  </header>
+
+  <section aria-label="Search pantries" class="surface rounded-2xl p-4 sm:p-5 mb-6 grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
+    <label class="block"><span class="sr-only">Search</span>
+      <input id="q" class="field" type="search" placeholder="Search by pantry name or town">
+    </label>
+    <label class="block"><span class="sr-only">Town</span>
+      <select id="town" class="field"><option value="">All towns</option></select>
+    </label>
+    <label class="block"><span class="sr-only">Needed item</span>
+      <select id="item" class="field"><option value="">Any needed item</option></select>
+    </label>
+  </section>
+
+  <div class="flex items-center justify-between mb-3">
+    <p id="count" class="muted text-sm" aria-live="polite"></p>
+    <button id="openUpdate" class="btn-ghost text-sm">I run a pantry: update needs</button>
+  </div>
+
+  <ul id="list" class="grid gap-4 md:grid-cols-2 mb-14"></ul>
+
+  <!-- Pantry Cook -->
+  <section id="cook" class="rounded-2xl p-5 sm:p-7" style="background:var(--sage)">
+    <h2 class="text-3xl font-extrabold mb-1">Pantry Cook</h2>
+    <p class="muted mb-4">Pick 3 to 5 ingredients from your pantry bag and get a simple meal.</p>
+
+    <div id="chips" class="flex flex-wrap gap-2 mb-3" role="group" aria-label="Common pantry ingredients"></div>
+    <form id="addForm" class="flex gap-2 mb-4 max-w-md">
+      <label class="flex-1"><span class="sr-only">Add another ingredient</span>
+        <input id="custom" class="field" maxlength="30" placeholder="Add another (e.g. sweet potato)">
+      </label>
+      <button class="btn-ghost" type="submit">Add</button>
+    </form>
+
+    <div class="flex items-center gap-3 flex-wrap">
+      <button id="genBtn" class="btn" disabled>Generate recipe</button>
+      <span id="pickCount" class="muted text-sm">0 of 5 picked</span>
+    </div>
+
+    <article id="recipe" class="surface rounded-xl p-5 mt-5 hidden" aria-live="polite"></article>
+  </section>
+
+  <footer class="muted text-sm mt-10">
+    Information can change. Call ahead before visiting or dropping off donations.
+  </footer>
+</div>
+
+<!-- Update needs modal -->
+<dialog id="updateDlg" aria-labelledby="dlgTitle">
+  <form id="updateForm" class="p-6 grid gap-4" method="dialog">
+    <h2 id="dlgTitle" class="text-2xl font-bold">Update your pantry's needs</h2>
+    <label class="grid gap-1"><span class="font-bold">Pantry</span>
+      <select id="uPantry" class="field" required></select>
+    </label>
+    <label class="grid gap-1"><span class="font-bold">Coordinator code</span>
+      <input id="uCode" class="field" type="password" required autocomplete="off">
+    </label>
+    <label class="grid gap-1"><span class="font-bold">Items you need most</span>
+      <textarea id="uNeeds" class="field" rows="3" required placeholder="Canned protein, Diapers, Cereal"></textarea>
+      <span class="muted text-sm">Separate items with commas.</span>
+    </label>
+    <p id="uMsg" class="text-sm font-bold" role="alert"></p>
+    <div class="flex justify-end gap-2">
+      <button type="button" id="cancelUpdate" class="btn-ghost">Cancel</button>
+      <button type="submit" class="btn">Save needs</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+/* ================= CONFIG ================= */
+const CONFIG = {
+  // Leave empty to use the built-in offline recipe generator.
+  // Set to your serverless proxy (e.g. "/api/recipe") to use OpenAI. Never put an API key in this file.
+  AI_ENDPOINT: "",
+  STORAGE_KEY: "pantries_v1",
+};
+
+/* ================= SEED DATA =================
+   SAMPLE ENTRIES ONLY. Replace every name, address, hour and code
+   with information confirmed directly by each pantry before launch. */
+const SEED = [
+  { id:"p1", name:"Sample: Lansdale Community Pantry", town:"Lansdale", address:"100 Main St, Lansdale, PA", hours:"Tue & Thu 10am–2pm", phone:"(555) 010-0001", needs:["Canned protein","Diapers"], code:"demo1", updated:null },
+  { id:"p2", name:"Sample: Norristown Food Cupboard", town:"Norristown", address:"200 Markley St, Norristown, PA", hours:"Mon–Fri 9am–12pm", phone:"(555) 010-0002", needs:["Peanut butter","Cereal","Rice"], code:"demo2", updated:null },
+  { id:"p3", name:"Sample: Pottstown Neighbors Pantry", town:"Pottstown", address:"300 High St, Pottstown, PA", hours:"Wed 4pm–7pm, Sat 9am–11am", phone:"(555) 010-0003", needs:["Canned fruit","Toilet paper"], code:"demo3", updated:null },
+  { id:"p4", name:"Sample: Reading Eastside Pantry", town:"Reading", address:"400 Penn St, Reading, PA", hours:"Mon & Wed 1pm–4pm", phone:"(555) 010-0004", needs:["Canned protein","Pasta","Baby formula"], code:"demo4", updated:null },
+  { id:"p5", name:"Sample: Ambler Area Food Shelf", town:"Ambler", address:"500 Butler Ave, Ambler, PA", hours:"Sat 10am–1pm", phone:"(555) 010-0005", needs:["Diapers","Soup"], code:"demo5", updated:null },
+];
+
+/* ================= DATA LAYER =================
+   Only these two functions touch storage. To move to Firebase,
+   replace their bodies with Firestore calls (getDocs / updateDoc). */
+const DB = {
+  async list(){
+    try{
+      const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    this._save(SEED);
+    return structuredClone(SEED);
+  },
+  async updateNeeds(id, code, needs){
+    const all = await this.list();
+    const p = all.find(x => x.id === id);
+    if(!p) throw new Error("That pantry isn't in the directory.");
+    if(p.code !== code) throw new Error("That coordinator code doesn't match this pantry.");
+    p.needs = needs; p.updated = new Date().toISOString();
+    this._save(all);
+    return p;
+  },
+  _save(data){ try{ localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(data)); }catch(e){} }
+};
+
+/* ================= HELPERS ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm = s => s.trim().toLowerCase();
+const titleCase = s => s.trim().replace(/\s+/g," ").replace(/^./, c => c.toUpperCase());
+
+/* ================= DIRECTORY ================= */
+let pantries = [];
+
+async function loadDirectory(){
+  pantries = await DB.list();
+  fillSelect($("#town"), [...new Set(pantries.map(p => p.town))].sort(), "All towns");
+  const items = [...new Set(pantries.flatMap(p => p.needs.map(titleCase)))].sort();
+  fillSelect($("#item"), items, "Any needed item");
+  $("#uPantry").innerHTML = pantries.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
+  render();
+}
+
+function fillSelect(el, values, allLabel){
+  const keep = el.value;
+  el.innerHTML = `<option value="">${allLabel}</option>` + values.map(v => `<option>${esc(v)}</option>`).join("");
+  if(values.includes(keep)) el.value = keep;
+}
+
+function render(){
+  const q = norm($("#q").value), town = $("#town").value, item = norm($("#item").value);
+  const rows = pantries.filter(p =>
+    (!q || norm(p.name).includes(q) || norm(p.town).includes(q)) &&
+    (!town || p.town === town) &&
+    (!item || p.needs.some(n => norm(n) === item))
+  );
+  $("#count").textContent = `${rows.length} ${rows.length === 1 ? "pantry" : "pantries"}`;
+  $("#list").innerHTML = rows.length ? rows.map(card).join("") :
+    `<li class="surface rounded-2xl p-6 md:col-span-2">No pantries match. Clear a filter or try a nearby town.</li>`;
+}
+
+function card(p){
+  const updated = p.updated ? `Needs updated ${new Date(p.updated).toLocaleDateString()}` : "Needs not yet updated by coordinator";
+  return `<li class="surface rounded-2xl p-5 flex flex-col gap-3">
+    <div>
+      <h3 class="text-xl font-bold leading-tight">${esc(p.name)}</h3>
+      <p class="muted">${esc(p.address)}</p>
+    </div>
+    <dl class="grid grid-cols-[auto_1fr] gap-x-3 text-sm">
+      <dt class="font-bold">Hours</dt><dd>${esc(p.hours)}</dd>
+      <dt class="font-bold">Phone</dt><dd><a class="underline" href="tel:${esc(p.phone.replace(/[^\d+]/g,""))}">${esc(p.phone)}</a></dd>
+    </dl>
+    <div>
+      <p class="text-sm font-bold mb-1.5">Needs most right now</p>
+      <div class="flex flex-wrap gap-1.5">${p.needs.map(n => `<span class="need">${esc(titleCase(n))}</span>`).join("")}</div>
+    </div>
+    <div class="flex items-center justify-between mt-auto pt-1 text-sm">
+      <span class="muted">${updated}</span>
+      <a class="font-bold underline" style="color:var(--pine)" target="_blank" rel="noopener"
+         href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}">Directions</a>
+    </div>
+  </li>`;
+}
+
+["#q","#town","#item"].forEach(s => $(s).addEventListener("input", render));
+
+/* ================= UPDATE NEEDS MODAL ================= */
+const dlg = $("#updateDlg");
+$("#openUpdate").onclick = () => { $("#uMsg").textContent = ""; syncNeedsField(); dlg.showModal(); };
+$("#cancelUpdate").onclick = () => dlg.close();
+$("#uPantry").onchange = syncNeedsField;
+function syncNeedsField(){
+  const p = pantries.find(x => x.id === $("#uPantry").value);
+  if(p) $("#uNeeds").value = p.needs.join(", ");
+}
+$("#updateForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const needs = [...new Set($("#uNeeds").value.split(",").map(titleCase).filter(Boolean))].slice(0, 12);
+  const msg = $("#uMsg");
+  if(!needs.length){ msg.style.color="var(--err)"; msg.textContent = "Add at least one item."; return; }
+  try{
+    await DB.updateNeeds($("#uPantry").value, $("#uCode").value.trim(), needs);
+    $("#uCode").value = "";
+    await loadDirectory();
+    dlg.close();
+  }catch(err){ msg.style.color="var(--err)"; msg.textContent = err.message; }
+});
+
+/* ================= PANTRY COOK ================= */
+const COMMON = ["Rice","Pasta","Canned beans","Canned tuna","Canned chicken","Canned corn","Canned tomatoes","Peanut butter","Oats","Canned green beans","Potatoes","Lentils"];
+const picked = new Set();
+const MAX = 5, MIN = 3;
+
+function renderChips(){
+  const all = [...new Set([...COMMON, ...picked])];
+  $("#chips").innerHTML = all.map(i =>
+    `<button type="button" class="chip" aria-pressed="${picked.has(i)}" data-i="${esc(i)}">${esc(i)}</button>`).join("");
+  $("#pickCount").textContent = `${picked.size} of ${MAX} picked`;
+  $("#genBtn").disabled = picked.size < MIN;
+  $("#genBtn").style.opacity = picked.size < MIN ? .5 : 1;
+}
+$("#chips").addEventListener("click", e => {
+  const b = e.target.closest(".chip"); if(!b) return;
+  const i = b.dataset.i;
+  if(picked.has(i)) picked.delete(i); else if(picked.size < MAX) picked.add(i);
+  renderChips();
+});
+$("#addForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const v = titleCase($("#custom").value);
+  if(v && picked.size < MAX) picked.add(v);
+  $("#custom").value = ""; renderChips();
+});
+
+$("#genBtn").onclick = async () => {
+  const out = $("#recipe"), btn = $("#genBtn");
+  btn.disabled = true; btn.textContent = "Cooking up a recipe…";
+  out.classList.remove("hidden"); out.innerHTML = `<p class="muted">Working on it…</p>`;
+  let r;
+  try{ r = CONFIG.AI_ENDPOINT ? await aiRecipe([...picked]) : localRecipe([...picked]); }
+  catch(e){ r = localRecipe([...picked]); r.note = "The recipe service didn't respond, so this is a built-in recipe."; }
+  out.innerHTML = recipeHTML(r);
+  btn.textContent = "Generate recipe"; renderChips();
+};
+
+async function aiRecipe(ingredients){
+  const res = await fetch(CONFIG.AI_ENDPOINT, {
+    method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ ingredients })
+  });
+  if(!res.ok) throw new Error("AI request failed");
+  const r = await res.json();
+  if(!r.title || !Array.isArray(r.steps)) throw new Error("Bad AI response");
+  return r;
+}
+
+/* Offline generator: picks a template by ingredient type, same JSON shape as the AI proxy. */
+function localRecipe(items){
+  const has = re => items.some(i => re.test(i.toLowerCase()));
+  const grain = items.find(i => /rice|pasta|noodle|oat|potato|tortilla|bread/.test(i.toLowerCase()));
+  const protein = items.filter(i => /bean|tuna|chicken|lentil|egg|peanut|salmon/.test(i.toLowerCase()));
+  const extras = items.filter(i => i !== grain && !protein.includes(i));
+  const list = items.join(", ").toLowerCase();
+  if(has(/pasta|noodle/)) return {
+    title:`One-Pot ${grain} Toss`, time:"25 min", servings:4, ingredients:[...items,"Salt, pepper, any oil"],
+    steps:[`Boil ${grain.toLowerCase()} in salted water until tender. Save ½ cup of the water, then drain.`,
+      `In the same pot, warm ${[...protein,...extras].join(", ").toLowerCase() || "your other ingredients"} with a spoon of oil for 3–4 minutes. Drain canned items first.`,
+      `Add the ${grain.toLowerCase()} back with a splash of saved water. Stir until saucy and season to taste.`],
+    tip:"A squeeze of lemon or a pinch of garlic powder brightens canned flavors."
+  };
+  if(!grain || has(/lentil|tomato/) && !has(/rice/)) return {
+    title:"Hearty Pantry Soup", time:"30 min", servings:4, ingredients:[...items,"4 cups water or broth","Salt, pepper"],
+    steps:[`Add ${list} to a pot with 4 cups of water or broth. Drain and rinse canned beans first.`,
+      "Bring to a boil, then lower to a simmer for 20 minutes, stirring now and then.",
+      "Mash some of it with a spoon to thicken. Season and serve."],
+    tip:"Soup freezes well. Portion leftovers into containers for later."
+  };
+  return {
+    title:`Skillet ${grain} Bowl`, time:"25 min", servings:3, ingredients:[...items,"Salt, pepper, any oil or butter"],
+    steps:[grain.toLowerCase().includes("rice") ? "Cook 1 cup rice in 2 cups water, covered, on low for 18 minutes." :
+      `Cook the ${grain.toLowerCase()} until soft.`,
+      `Meanwhile, drain canned items and warm ${[...protein,...extras].join(", ").toLowerCase() || "the toppings"} in a skillet with a little oil for 5 minutes.`,
+      `Spoon over the ${grain.toLowerCase()}, season, and serve.`],
+    tip:"Stretch it further by adding any frozen or fresh vegetables you have."
+  };
+}
+
+function recipeHTML(r){
+  return `<h3 class="text-2xl font-bold mb-1">${esc(r.title)}</h3>
+    <p class="muted text-sm mb-4">${esc(r.time || "")}${r.servings ? `, serves ${esc(r.servings)}` : ""}</p>
+    <div class="grid gap-5 sm:grid-cols-[1fr_2fr]">
+      <div><h4 class="font-bold mb-1">You'll need</h4>
+        <ul class="list-disc pl-5">${r.ingredients.map(i => `<li>${esc(i)}</li>`).join("")}</ul></div>
+      <div><h4 class="font-bold mb-1">Steps</h4>
+        <ol class="list-decimal pl-5 grid gap-1.5">${r.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol></div>
+    </div>
+    ${r.tip ? `<p class="mt-4 text-sm"><strong>Tip:</strong> ${esc(r.tip)}</p>` : ""}
+    ${r.note ? `<p class="mt-2 text-sm muted">${esc(r.note)}</p>` : ""}`;
+}
+
+/* ================= START ================= */
+renderChips();
+loadDirectory();
+</script>
+</body>
+</html>
