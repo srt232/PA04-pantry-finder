@@ -129,18 +129,18 @@ const CONFIG = {
   // Leave empty to use the built-in offline recipe generator.
   // Set to your serverless proxy (e.g. "/api/recipe") to use OpenAI. Never put an API key in this file.
   AI_ENDPOINT: "",
-  STORAGE_KEY: "pantries_v1",
+  STORAGE_KEY: "pantries_v2",
 };
 
 /* ================= SEED DATA =================
    SAMPLE ENTRIES ONLY. Replace every name, address, hour and code
    with information confirmed directly by each pantry before launch. */
 const SEED = [
-  { id:"p1", name:"Pottstown Cluster Food Distribution Center", town:"Pottstown", address:"57 N Franklin St, Pottstown, PA 19464", hours:"Tue & Thu 9:30–11:45am, Wed 2:30–4:45pm", phone:"(610) 970-5995", needs:["Canned chicken", "Cereal", "Canned fruit", "Cooking oil"], code:"Pottstowns143", updated:null },
-  { id:"p2", name:"YWCA Tri-County Area Food Cupboard", town:"Pottstown", address:"315 King St, Pottstown, PA 19464", hours:"Thursdays from 10:00 AM to 5:00 PM", phone:"610-323-1888", needs:["Peanut butter", "Canned tuna", "Pasta sauce", "Soap & toothpaste"], code:"Pottstown146", updated:null },
-  { id:"p3", name:"Daily Bread Community Food Pantry", town:"Collegeville", address:"16 Iron Bridge Dr, Collegeville, PA 19426", hours:"Wed & Sat 9–11am, Thu 6–8pm", phone:"(610) 489-5540", needs:["Shelf-stable milk", "Skillet dinners", "Baked beans", "Coffee"], code:"Pottstown149", updated:null },
-  { id:"p4", name:"Seeds of Hope Community Food Pantry", town:"Dresher", address:"1601 Limekiln Pike, Dresher, PA 19025", hours:"Tue & Fri 10am–12:30pm", phone:"(215) 646-5588", needs:["Peanut butter", "Pasta sauce", "Cereal", "Canned tuna"], code:"Pottstown152", updated:null },
-  { id:"p5", name:"Jenkintown Food Cupboard", town:"Jenkintown", address:"328 Summit Ave, Jenkintown, PA 19046", hours:"Tue 5:30 PM – 7:00 PM & Thu 12:30 PM – 2:00 PM and 3:00 PM – 4:30 PM", phone:"(215) 274-5720", needs:["Cooking oil", "Canned meat", "Canned soups", "Boxed milk"], code:"Pottstown155", updated:null },
+  { id:"p1", name:"Pottstown Cluster Food Distribution Center", town:"Pottstown", address:"57 N Franklin St, Pottstown, PA 19464", hours:"Tue & Thu 9:30–11:45am, Wed 2:30–4:45pm", schedule:{ 2:[[9.5, 11.75]], 3:[[14.5, 16.75]], 4:[[9.5, 11.75]] }, phone:"(610) 970-5995", needs:["Canned chicken", "Cereal", "Canned fruit", "Cooking oil"], code:"Pottstowns143", updated:null },
+  { id:"p2", name:"YWCA Tri-County Area Food Cupboard", town:"Pottstown", address:"315 King St, Pottstown, PA 19464", hours:"Thursdays from 10:00 AM to 5:00 PM", schedule:{ 4:[[10, 17]] }, phone:"610-323-1888", needs:["Peanut butter", "Canned tuna", "Pasta sauce", "Soap & toothpaste"], code:"Pottstown146", updated:null },
+  { id:"p3", name:"Daily Bread Community Food Pantry", town:"Collegeville", address:"16 Iron Bridge Dr, Collegeville, PA 19426", hours:"Wed & Sat 9–11am, Thu 6–8pm", schedule:{ 3:[[9, 11]], 4:[[18, 20]], 6:[[9, 11]] }, phone:"(610) 489-5540", needs:["Shelf-stable milk", "Skillet dinners", "Baked beans", "Coffee"], code:"Pottstown149", updated:null },
+  { id:"p4", name:"Seeds of Hope Community Food Pantry", town:"Dresher", address:"1601 Limekiln Pike, Dresher, PA 19025", hours:"Tue & Fri 10am–12:30pm", schedule:{ 2:[[10, 12.5]], 5:[[10, 12.5]] }, phone:"(215) 646-5588", needs:["Peanut butter", "Pasta sauce", "Cereal", "Canned tuna"], code:"Pottstown152", updated:null },
+  { id:"p5", name:"Jenkintown Food Cupboard", town:"Jenkintown", address:"328 Summit Ave, Jenkintown, PA 19046", hours:"Tue 5:30 PM – 7:00 PM & Thu 12:30 PM – 2:00 PM and 3:00 PM – 4:30 PM",schedule:{ 2:[[17.5, 19]], 4:[[12.5, 14], [15, 16.5]] }, phone:"(215) 274-5720", needs:["Cooking oil", "Canned meat", "Canned soups", "Boxed milk"], code:"Pottstown155", updated:null },
 ];
 
 /* ================= DATA LAYER =================
@@ -203,11 +203,19 @@ function render(){
     `<li class="surface rounded-2xl p-6 md:col-span-2">No pantries match. Clear a filter or try a nearby town.</li>`;
 }
 
-function card(p){
+ function isOpenNow(p){
+      const now = new Date();
+      const day = now.getDay();
+      const time = now.getHours() + now.getMinutes() / 60;
+      const windows = p.schedule[day] || [];
+      return windows.some(w => time >= w[0] && time < w[1]);
+    }
+  function card(p){
   const updated = p.updated ? `Needs updated ${new Date(p.updated).toLocaleDateString()}` : "Needs not yet updated by coordinator";
   return `<li class="surface rounded-2xl p-5 flex flex-col gap-3">
     <div>
       <h3 class="text-xl font-bold leading-tight">${esc(p.name)}</h3>
+      ${isOpenNow(p) ? `<span class="text-sm font-bold" style="color:var(--pine)">● Open now</span>` : `<span class="text-sm muted">Closed now</span>`}
       <p class="muted">${esc(p.address)}</p>
     </div>
     <dl class="grid grid-cols-[auto_1fr] gap-x-3 text-sm">
@@ -220,13 +228,25 @@ function card(p){
     </div>
     <div class="flex items-center justify-between mt-auto pt-1 text-sm">
       <span class="muted">${updated}</span>
+      <div class="flex gap-4">
+      <button class="font-bold underline" data-share="${p.id}">Share needs</button>
       <a class="font-bold underline" style="color:var(--pine)" target="_blank" rel="noopener"
-         href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}">Directions</a>
+         href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + ", " + p.address)}">Directions</a>
+    </div>
     </div>
   </li>`;
 }
 
 ["#q","#town","#item"].forEach(s => $(s).addEventListener("input", render));
+  $("#list").addEventListener("click", async e => {
+      const b = e.target.closest("[data-share]");
+  if(!b) return;
+      const p = pantries.find(x => x.id === b.dataset.share);
+      const text = `${p.name} needs: ${p.needs.join(", ")}. Drop off at ${p.address}. Hours: ${p.hours}`;
+      try { await navigator.clipboard.writeText(text); b.textContent = "Copied!"; }
+  catch { prompt("Copy this message:", text); }
+  setTimeout(() => b.textContent = "Share needs", 2000);
+    });
 
 /* ================= UPDATE NEEDS MODAL ================= */
 const dlg = $("#updateDlg");
