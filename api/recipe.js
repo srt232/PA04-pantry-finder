@@ -34,7 +34,10 @@ export default async function handler(req, res) {
     }),
   });
 
-  if (!r.ok) return res.status(502).json({ error: "Recipe service unavailable" });
+  if (!r.ok) {
+  console.log("OpenAI error:", r.status, await r.text());
+  return res.status(502).json({ error: "Recipe service unavailable" });
+}
   const data = await r.json();
   try {
     return res.status(200).json(JSON.parse(data.choices[0].message.content));
